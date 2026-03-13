@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RecipeVault - Discover & Plan Your Meals</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#e85d04">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍳</text></svg>">
+</head>
+<body>
+  <div id="app">
+    <!-- Navigation -->
+    <nav id="main-nav">
+      <div class="nav-brand" onclick="navigateTo('home')">
+        <span class="brand-icon">🍳</span>
+        <span class="brand-text" data-i18n="brandName">RecipeVault</span>
+      </div>
+      <div class="nav-links">
+        <button class="nav-btn active" data-page="home" onclick="navigateTo('home')">
+          <span class="nav-icon">🔍</span> <span data-i18n="discover">Discover</span>
+        </button>
+        <button class="nav-btn" data-page="collections" onclick="navigateTo('collections')">
+          <span class="nav-icon">📚</span> <span data-i18n="collections">Collections</span>
+        </button>
+        <button class="nav-btn" data-page="planner" onclick="navigateTo('planner')">
+          <span class="nav-icon">📅</span> <span data-i18n="mealPlan">Meal Plan</span>
+        </button>
+      </div>
+      <div class="nav-status">
+        <button id="lang-toggle" class="lang-toggle" onclick="toggleLanguage()">עב</button>
+        <span id="offline-badge" class="badge hidden" data-i18n="offline">Offline</span>
+      </div>
+    </nav>
+
+    <!-- Home / Search Page -->
+    <main id="page-home" class="page active">
+      <!-- Hero Search -->
+      <section class="hero">
+        <div class="hero-content">
+          <h1 data-i18n="heroTitle">What would you like to cook?</h1>
+          <div class="search-container">
+            <div class="search-box">
+              <span class="search-icon">🔍</span>
+              <input type="text" id="search-input" data-i18n-placeholder="searchPlaceholder" placeholder="Search recipes, ingredients..." autocomplete="off">
+              <button id="search-btn" class="btn-primary" onclick="performSearch()" data-i18n="search">Search</button>
+            </div>
+            <button class="filter-toggle" onclick="toggleFilters()">
+              <span>⚙️</span> <span data-i18n="filters">Filters</span>
+            </button>
+          </div>
+          <!-- Advanced Filters -->
+          <div id="filters-panel" class="filters-panel hidden">
+            <div class="filter-group">
+              <label data-i18n="cuisine">Cuisine</label>
+              <select id="filter-cuisine">
+                <option value="" data-i18n="allCuisines">All Cuisines</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label data-i18n="category">Category</label>
+              <select id="filter-category">
+                <option value="" data-i18n="allCategories">All Categories</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label data-i18n="diet">Diet</label>
+              <select id="filter-diet">
+                <option value="" data-i18n="anyDiet">Any Diet</option>
+                <option value="vegetarian" data-i18n="vegetarian">Vegetarian</option>
+                <option value="vegan" data-i18n="vegan">Vegan</option>
+                <option value="seafood" data-i18n="seafood">Seafood</option>
+                <option value="chicken" data-i18n="chicken">Chicken</option>
+                <option value="beef" data-i18n="beef">Beef</option>
+                <option value="pork" data-i18n="pork">Pork</option>
+                <option value="lamb" data-i18n="lamb">Lamb</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label data-i18n="maxPrepTime">Max Prep Time</label>
+              <select id="filter-time">
+                <option value="" data-i18n="anyTime">Any Time</option>
+                <option value="15" data-i18n="under15">Under 15 min</option>
+                <option value="30" data-i18n="under30">Under 30 min</option>
+                <option value="60" data-i18n="under1h">Under 1 hour</option>
+                <option value="120" data-i18n="under2h">Under 2 hours</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label data-i18n="ingredientsFilter">Ingredients (comma separated)</label>
+              <input type="text" id="filter-ingredients" data-i18n-placeholder="ingredientsPlaceholder" placeholder="e.g. chicken, rice, garlic">
+            </div>
+            <button class="btn-primary" onclick="performSearch()" data-i18n="applyFilters">Apply Filters</button>
+            <button class="btn-ghost" onclick="clearFilters()" data-i18n="clear">Clear</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Quick Categories -->
+      <section class="quick-categories" id="quick-categories">
+        <h2 data-i18n="browseByCategory">Browse by Category</h2>
+        <div class="category-scroll" id="category-list"></div>
+      </section>
+
+      <!-- Search Results / Featured -->
+      <section class="results-section">
+        <h2 id="results-heading" data-i18n="featuredRecipes">Featured Recipes</h2>
+        <div class="recipe-grid" id="recipe-grid"></div>
+        <div id="loading" class="loading hidden">
+          <div class="spinner"></div>
+          <p data-i18n="findingRecipes">Finding delicious recipes...</p>
+        </div>
+        <div id="no-results" class="no-results hidden">
+          <span class="no-results-icon">🍽️</span>
+          <p data-i18n="noRecipes">No recipes found. Try a different search!</p>
+        </div>
+      </section>
+    </main>
+
+    <!-- Recipe Detail Modal -->
+    <div id="recipe-modal" class="modal hidden">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+        <div id="recipe-detail"></div>
+      </div>
+    </div>
+
+    <!-- Cooking Mode Overlay -->
+    <div id="cooking-mode" class="cooking-mode hidden">
+      <div class="cooking-header">
+        <button class="btn-ghost" onclick="exitCookingMode()">✕ <span data-i18n="exitCooking">Exit Cooking</span></button>
+        <h2 id="cooking-title"></h2>
+        <div class="cooking-progress">
+          <span id="cooking-step-counter"></span>
+          <div class="progress-bar"><div id="cooking-progress-fill" class="progress-fill"></div></div>
+        </div>
+      </div>
+      <div class="cooking-body">
+        <div class="cooking-step" id="cooking-step-content"></div>
+        <div class="cooking-timer-section" id="cooking-timer-section">
+          <div class="timer-display" id="timer-display">00:00</div>
+          <div class="timer-controls">
+            <button class="btn-timer" onclick="setTimer(1)" data-i18n="min1">1 min</button>
+            <button class="btn-timer" onclick="setTimer(5)" data-i18n="min5">5 min</button>
+            <button class="btn-timer" onclick="setTimer(10)" data-i18n="min10">10 min</button>
+            <button class="btn-timer" onclick="setTimer(15)" data-i18n="min15">15 min</button>
+            <button class="btn-timer" onclick="setTimer(30)" data-i18n="min30">30 min</button>
+            <input type="number" id="custom-timer" data-i18n-placeholder="customMin" placeholder="Custom min" min="1" max="999" class="timer-input">
+            <button class="btn-timer" onclick="setTimer(parseInt(document.getElementById('custom-timer').value)||1)" data-i18n="set">Set</button>
+          </div>
+          <div class="timer-actions">
+            <button class="btn-primary" id="timer-start-btn" onclick="toggleTimer()" data-i18n="startTimer">Start Timer</button>
+            <button class="btn-ghost" onclick="resetTimer()" data-i18n="reset">Reset</button>
+          </div>
+        </div>
+        <div class="cooking-nav">
+          <button class="btn-ghost" id="prev-step-btn" onclick="cookingStep(-1)">← <span data-i18n="previous">Previous</span></button>
+          <button class="btn-primary" id="next-step-btn" onclick="cookingStep(1)"><span data-i18n="nextStep">Next Step</span> →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Collections Page -->
+    <main id="page-collections" class="page hidden">
+      <section class="page-header">
+        <h1 data-i18n="myCollections">My Collections</h1>
+        <button class="btn-primary" onclick="createCollection()" data-i18n="newCollection">+ New Collection</button>
+      </section>
+      <div class="collections-grid" id="collections-grid"></div>
+      <section id="collection-detail-section" class="hidden">
+        <div class="collection-header">
+          <button class="btn-ghost" onclick="showCollectionsList()">← <span data-i18n="back">Back</span></button>
+          <h2 id="collection-detail-title"></h2>
+          <button class="btn-ghost danger" onclick="deleteCurrentCollection()">🗑️ <span data-i18n="delete">Delete</span></button>
+        </div>
+        <div class="recipe-grid" id="collection-recipes"></div>
+      </section>
+    </main>
+
+    <!-- Meal Planner Page -->
+    <main id="page-planner" class="page hidden">
+      <section class="page-header">
+        <h1 data-i18n="mealPlanner">Meal Planner</h1>
+        <div class="planner-nav">
+          <button class="btn-ghost" onclick="changeWeek(-1)">← <span data-i18n="prevWeek">Prev Week</span></button>
+          <span id="planner-week-label"></span>
+          <button class="btn-ghost" onclick="changeWeek(1)"><span data-i18n="nextWeek">Next Week</span> →</button>
+        </div>
+      </section>
+      <div class="planner-grid" id="planner-grid"></div>
+      <div class="planner-sidebar">
+        <h3 data-i18n="savedRecipes">Saved Recipes</h3>
+        <p class="hint" data-i18n="dragHint">Drag recipes onto the calendar</p>
+        <div id="planner-recipe-list" class="planner-recipe-list"></div>
+      </div>
+    </main>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+  </div>
+
+  <script src="i18n.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
