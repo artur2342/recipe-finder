@@ -350,9 +350,134 @@ function applyTranslations() {
     renderRecipeGrid(state.recipes, "recipe-grid");
   }
 
+  // Re-render detail if open
+  if (typeof state !== "undefined" && state.currentRecipe) {
+    const modal = document.getElementById("recipe-modal");
+    if (modal && !modal.classList.contains("hidden")) {
+      renderRecipeDetail(state.currentRecipe);
+    }
+  }
+
   // Update planner locale
   const plannerPage = document.getElementById("page-planner");
   if (plannerPage && plannerPage.classList.contains("active")) {
     renderPlanner();
   }
+}
+
+// ---- Recipe Content Translation ----
+// Uses MyMemory free API (no key, ~5000 words/day)
+// Results are cached in localStorage to minimize API calls
+
+const translationCache = JSON.parse(localStorage.getItem("rv_translations") || "{}");
+
+function saveTranslationCache() {
+  // Keep cache under 500 entries to avoid localStorage bloat
+  const keys = Object.keys(translationCache);
+  if (keys.length > 500) {
+    for (let i = 0; i < 100; i++) delete translationCache[keys[i]];
+  }
+  localStorage.setItem("rv_translations", JSON.stringify(translationCache));
+}
+
+function getCacheKey(text) {
+  // Short hash for cache key
+  let h = 0;
+  for (let i = 0; i < text.length; i++) {
+    h = ((h << 5) - h + text.charCodeAt(i)) | 0;
+  }
+  return "he_" + Math.abs(h).toString(36);
+}
+
+async function translateText(text) {
+  if (!text || !text.trim()) return text;
+  if (currentLang === "en") return text;
+
+  const key = getCacheKey(text);
+  if (translationCache[key]) return translationCache[key];
+
+  try {
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text.substring(0, 500))}&langpair=en|he`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (data.responseStatus === 200 && data.responseData?.translatedText) {
+      const translated = data.responseData.translatedText;
+      translationCache[key] = translated;
+      saveTranslationCache();
+      return translated;
+    }
+  } catch (e) {
+    // Translation failed, return original
+  }
+  return text;
+}
+
+// Batch translate multiple strings at once (for efficiency)
+async function translateBatch(texts) {
+  if (currentLang === "en") return texts;
+
+  const results = [];
+  const toTranslate = [];
+  const indices = [];
+
+  for (let i = 0; i < texts.length; i++) {
+    const key = getCacheKey(texts[i]);
+    if (translationCache[key]) {
+      results[i] = translationCache[key];
+    } else {
+      results[i] = null;
+      toTranslate.push(texts[i]);
+      indices.push(i);
+    }
+  }
+
+  // Translate uncached strings (limit concurrency)
+  const batchSize = 5;
+  for (let b = 0; b < toTranslate.length; b += batchSize) {
+    const batch = toTranslate.slice(b, b + batchSize);
+    const promises = batch.map((text) => translateText(text));
+    const translated = await Promise.all(promises);
+    for (let j = 0; j < translated.length; j++) {
+      results[indices[b + j]] = translated[j];
+    }
+  }
+
+  return results.map((r, i) => r || texts[i]);
+}
+
+// Translate a full meal object's display fields, returns translated copies
+async function translateMeal(meal) {
+  if (currentLang === "en" || !meal) return meal;
+
+  const fields = [meal.strMeal || "", meal.strCategory || "", meal.strArea || ""];
+  const translated = await translateBatch(fields);
+
+  // Create a shallow copy with translated fields
+  return {
+    ...meal,
+    strMealOriginal: meal.strMeal,
+    strMeal: translated[0],
+    strCategory: translated[1],
+    strArea: translated[2],
+  };
+}
+
+// Translate instructions (longer text, done separately)
+async function translateInstructions(instructions) {
+  if (currentLang === "en" || !instructions) return instructions;
+  return translateText(instructions);
+}
+
+// Translate an array of meals (for grid display - just names)
+async function translateMeals(meals) {
+  if (currentLang === "en" || !meals || meals.length === 0) return meals;
+
+  const names = meals.map((m) => m.strMeal || "");
+  const translated = await translateBatch(names);
+
+  return meals.map((m, i) => ({
+    ...m,
+    strMealOriginal: m.strMeal,
+    strMeal: translated[i] || m.strMeal,
+  }));
 }

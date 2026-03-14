@@ -289,7 +289,7 @@ function clearFilters() {
 }
 
 // ---- Rendering ----
-function renderRecipeGrid(meals, containerId) {
+async function renderRecipeGrid(meals, containerId) {
   const grid = document.getElementById(containerId);
   const noResults = document.getElementById("no-results");
 
@@ -301,17 +301,21 @@ function renderRecipeGrid(meals, containerId) {
 
   if (noResults) noResults.classList.add("hidden");
 
-  grid.innerHTML = meals
+  // Translate meal names if in Hebrew
+  const displayMeals = await translateMeals(meals);
+
+  grid.innerHTML = displayMeals
     .map((meal) => {
       const rating = getRating(meal.idMeal);
       const time = generatePrepTime(meal);
       const isSaved = !!state.savedRecipes[meal.idMeal];
+      const origName = meal.strMealOriginal || meal.strMeal;
       return `
       <div class="recipe-card" onclick="openRecipe('${meal.idMeal}')">
         <img class="recipe-card-img" src="${meal.strMealThumb}" alt="${escapeHtml(meal.strMeal)}" loading="lazy">
         <div class="recipe-card-actions">
           <button class="card-action-btn ${isSaved ? "saved" : ""}"
-            onclick="event.stopPropagation(); toggleSave('${meal.idMeal}', '${escapeHtml(meal.strMeal)}', '${meal.strMealThumb}')"
+            onclick="event.stopPropagation(); toggleSave('${meal.idMeal}', '${escapeHtml(origName)}', '${meal.strMealThumb}')"
             title="${isSaved ? t("saved") : t("saveRecipe")}">
             ${isSaved ? "♥" : "♡"}
           </button>
@@ -373,8 +377,14 @@ async function openRecipe(id) {
   }
 }
 
-function renderRecipeDetail(meal) {
+async function renderRecipeDetail(meal) {
   const detail = document.getElementById("recipe-detail");
+
+  // Translate meal content if in Hebrew
+  const translatedMeal = await translateMeal(meal);
+  const displayMeal = translatedMeal || meal;
+  const origName = meal.strMeal; // Keep original for save
+
   const nutrition = generateNutrition(meal);
   const time = generatePrepTime(meal);
   const allergens = generateAllergens(meal);
@@ -385,22 +395,38 @@ function renderRecipeDetail(meal) {
   const isSaved = !!state.savedRecipes[meal.idMeal];
   const maxCal = 800;
 
+  // Translate ingredients and steps if in Hebrew
+  let displayIngredients = ingredients;
+  let displaySteps = steps;
+  if (isRTL()) {
+    const ingNames = ingredients.map((i) => i.name);
+    const translatedNames = await translateBatch(ingNames);
+    displayIngredients = ingredients.map((ing, i) => ({
+      ...ing,
+      displayName: translatedNames[i] || ing.name,
+    }));
+    const translatedSteps = await translateBatch(steps);
+    displaySteps = translatedSteps;
+  } else {
+    displayIngredients = ingredients.map((ing) => ({ ...ing, displayName: ing.name }));
+  }
+
   detail.innerHTML = `
     <div class="detail-hero">
-      <img src="${meal.strMealThumb}" alt="${escapeHtml(meal.strMeal)}">
+      <img src="${meal.strMealThumb}" alt="${escapeHtml(displayMeal.strMeal)}">
       <div class="detail-hero-overlay">
-        <h1>${escapeHtml(meal.strMeal)}</h1>
+        <h1>${escapeHtml(displayMeal.strMeal)}</h1>
         <div class="detail-hero-meta">
           <span>⏱ ${time} ${t("min")}</span>
-          ${meal.strArea ? `<span>🌍 ${meal.strArea}</span>` : ""}
-          ${meal.strCategory ? `<span>📁 ${meal.strCategory}</span>` : ""}
+          ${displayMeal.strArea ? `<span>🌍 ${displayMeal.strArea}</span>` : ""}
+          ${displayMeal.strCategory ? `<span>📁 ${displayMeal.strCategory}</span>` : ""}
           <span>${starsHTML(rating.avg, 16)} ${rating.avg} (${rating.count})</span>
         </div>
       </div>
     </div>
     <div class="detail-body">
       <div class="detail-actions">
-        <button class="btn-primary" onclick="toggleSave('${meal.idMeal}', '${escapeHtml(meal.strMeal)}', '${meal.strMealThumb}'); openRecipe('${meal.idMeal}')">
+        <button class="btn-primary" onclick="toggleSave('${meal.idMeal}', '${escapeHtml(origName)}', '${meal.strMealThumb}'); openRecipe('${meal.idMeal}')">
           ${isSaved ? `♥ ${t("saved")}` : `♡ ${t("saveRecipe")}`}
         </button>
         <button class="btn-primary" onclick="startCookingMode()">👨‍🍳 ${t("startCooking")}</button>
@@ -468,14 +494,14 @@ function renderRecipeDetail(meal) {
       <div class="detail-section">
         <h3>${t("ingredients")}</h3>
         <ul class="ingredient-list" id="ingredient-list">
-          ${ingredients.map((ing) => `
+          ${displayIngredients.map((ing) => `
             <li class="ingredient-item">
               <img class="ingredient-thumb"
                 src="https://www.themealdb.com/images/ingredients/${encodeURIComponent(ing.name)}-Small.png"
-                alt="${escapeHtml(ing.name)}"
+                alt="${escapeHtml(ing.displayName)}"
                 onerror="this.style.display='none'">
               <span class="ingredient-measure" data-base="${escapeHtml(ing.measure)}">${escapeHtml(ing.measure)}</span>
-              <span>${escapeHtml(ing.name)}</span>
+              <span>${escapeHtml(ing.displayName)}</span>
             </li>`).join("")}
         </ul>
       </div>
@@ -483,7 +509,7 @@ function renderRecipeDetail(meal) {
       <div class="detail-section">
         <h3>${t("instructions")}</h3>
         <ol class="instruction-list">
-          ${steps.map((step, i) => `
+          ${displaySteps.map((step, i) => `
             <li class="instruction-item">
               <span class="step-number">${i + 1}</span>
               <span class="step-text">${escapeHtml(step)}</span>
